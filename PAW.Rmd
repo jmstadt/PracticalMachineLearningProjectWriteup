@@ -1,0 +1,119 @@
+---
+output: html_document
+---
+# Practical Machine Learning: Peer Assessment Writeup
+
+Download Files
+
+```{r}
+if (!file.exists("./pml-training.csv")) {
+  	fileUrl1 <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+		download.file(fileUrl1, destfile = "./pml-training.csv")
+		filelist <- list.files(".")
+		print(filelist)
+		dateDownloaded <- date()
+		print(dateDownloaded)
+	} else {message("pml-training.csv already exists")}
+
+if (!file.exists("./pml-testing.csv")) {
+    fileUrl2 <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+		download.file(fileUrl2, destfile = "./pml-testing.csv")
+		filelist <- list.files(".")
+		print(filelist)
+		dateDownloaded <- date()
+		print(dateDownloaded)
+	} else {message("pml-testing.csv already exists")}
+```
+
+## Loading the data
+read the CSV files into R, make sure and include all NA values.  When I first loaded, there were alot of blanks, so I reloaded having the blanks NA as well.
+```{r}
+training <- read.csv("./pml-training.csv", na.strings = c("NA", ""))
+testing <- read.csv("./pml-testing.csv", na.strings = c("NA", ""))
+dim(testing)
+dim(training)
+```
+
+
+## Exploratory Data Analysis and Cleaning Up Data
+So, per the above, the training set has 19,622 observations of 160 variables and the testing set has 20 observations of 160 variables.  The only variable that is different is the classe variable at the end of training and the problem_id variable for the testing set.
+
+Looking at the set by using head, tail and str, you can see there are alot of NAs. Formally can look at which columns have how many NAs by the following:
+
+```{r}
+naColumnsTraining <- table(colSums(is.na(training)))
+naColumnsTesting <- table(colSums(is.na(testing)))
+naColumnsTraining
+naColumnsTesting
+```
+
+so there are 60 columns in both the training and testing that do not have any NAs.  In the training there are 100 columns that have 19216 out of 19622 observations that are NAs.  So, almost all of them are NAs.  Similarly in the testing, there are 100 columns that have all 20 observations that are NAs.  So, lets get rid of those columns.
+
+```{r}
+naTotalsTraining <- colSums(is.na(training))
+getRidColumnsTraining <- naTotalsTraining == 19216
+noNaTraining <- training[!getRidColumnsTraining]
+dim(noNaTraining)
+sum(is.na(noNaTraining))
+
+naTotalsTesting <- colSums(is.na(testing))
+getRidColumnsTesting <- naTotalsTesting == 20
+noNaTesting <- testing[!getRidColumnsTesting]
+dim(noNaTesting)
+sum(is.na(noNaTesting))
+```
+
+So, now we have only the 60 variables in each that do not have NAs.  But, now, looking at the two datasets using str, head, and tail, the first 7 variables/columns do not really offer any data, they are more about accounting.  So, lets remove those columns.
+
+```{r}
+cleanTraining <- noNaTraining[, -c(1:7)]
+cleanTesting <- noNaTesting[, -c(1:7)]
+dim(cleanTraining)
+dim(cleanTesting)
+```
+
+##Cross Variance, Creating Model, and Checking Error
+
+Now that we have a clean set, will use Random Forest (from class and message boards) to fit a model.  But, first, will break the CleanTraining into a training set and a test set.
+
+```{r}
+library(caret)
+inTrain <- createDataPartition(y = cleanTraining$classe, p = 0.7, list = FALSE)
+trainingData <- cleanTraining[inTrain, ]
+testingData <- cleanTraining[-inTrain, ]
+dim(trainingData)
+dim(testingData)
+```
+
+so, now fit a model and check the results
+```{r}
+library(randomForest)
+modelFit = randomForest(classe~., data=trainingData)
+modelFit
+
+testingCheck <- predict(modelFit, testingData)
+confusionMatrix(testingCheck, testingData$classe)
+
+resultsCheck <- predict(modelFit, cleanTesting)
+resultsCheck <- as.character(resultsCheck)
+resultsCheck
+```
+
+The error rate in the trainingData is only 0.6%.  So, this looks good.
+
+The cross validation looks good as well as the accuracy when applying the model to the testingData is 95%.
+
+submission
+```{r}
+pml_write_files = function(x) {
+     n = length(x)
+     for (i in 1:n) {
+         filename = paste0("problem_id_", i, ".txt")
+         write.table(x[i], file = filename, quote = FALSE, row.names = FALSE, 
+             col.names = FALSE)
+     }
+ }
+pml_write_files(resultsCheck)
+```
+
+The model looks good here as well.  The submission is correct 20/20.  So Random Forest seemed to work out well.
